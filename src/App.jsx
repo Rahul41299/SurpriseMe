@@ -1,48 +1,145 @@
-import './App.css'
-import { useState } from "react";
-import { motion } from "framer-motion";
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
+import './App.css'; // Add styling
+import Confetti from 'react-confetti';
 
-function App() {
-  const [bgColor, setBgColor] = useState("#f8f9fa");
-  const [message, setMessage] = useState("Click for a surprise!");
+const App = () => {
+  const [match, setMatch] = useState(null);
+  const [prediction, setPrediction] = useState('');
+  const [result, setResult] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [celebrate, setCelebrate] = useState(false); // For confetti
+  const [thumbsDown, setThumbsDown] = useState(false); // For thumbs-down emojis
 
-  const messages = [
-    "You are awesome! 😎",
-    "Did you drink water today? 💧",
-    "Boom! You just got surprised! 🎉",
-    "A cat is watching you... 🐱",
-    "Dance like nobody's watching! 💃🕺"
-  ];
+  const offset = Math.random() * 100; // Random offset for pagination
+  const API_KEY = '5c83ba5b-2f6f-4258-9925-9952d28b54d0'; // Replace with your CricAPI key
+  const API_URL = `https://api.cricapi.com/v1/matches?apikey=${API_KEY}&offset=${offset}`;
 
-  const colors = ["#ffadad", "#ffd6a5", "#fdffb6", "#caffbf", "#9bf6ff", "#a0c4ff", "#bdb2ff", "#ffc6ff"];
+  const handleSurpriseMe = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await axios.get(API_URL);
+      const matches = response.data.data; // Updated to match the provided data structure
 
-  const playSound = () => {
-    const audio = new Audio("https://www.fesliyanstudios.com/play-mp3/4386");
-    audio.play();
+      // Filter for live or ended matches
+      const validMatches = matches.filter(match => match.matchStarted && match.matchEnded);
+
+      if (validMatches.length === 0) {
+        setError('No matches found.');
+        setLoading(false);
+        return;
+      }
+
+      // Randomly select a match
+      const randomMatch = validMatches[Math.floor(Math.random() * validMatches.length)];
+      setMatch(randomMatch);
+      setPrediction('');
+      setResult('');
+      setCelebrate(false);
+      setThumbsDown(false);
+    } catch (err) {
+      setError('Failed to fetch match data. Please try again.');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSurprise = () => {
-    const randomColor = colors[Math.floor(Math.random() * colors.length)];
-    const randomMessage = messages[Math.floor(Math.random() * messages.length)];
-    setBgColor(randomColor);
-    setMessage(randomMessage);
-    playSound();
+  const handlePrediction = (team) => {
+    setPrediction(team);
+    if (team === match.status.split(' won ')[0]) {
+      setResult('Correct! You predicted the winning team.');
+      setCelebrate(true);
+    } else {
+      setResult(`Incorrect! The winning team was ${match.status.split(' won ')[0]}.`);
+      setThumbsDown(true); // Trigger thumbs-down emojis
+    }
   };
+
+  // Reset celebration effects after a few seconds
+  useEffect(() => {
+    if (celebrate || thumbsDown) {
+      const timer = setTimeout(() => {
+        setCelebrate(false);
+        setThumbsDown(false);
+      }, 5000); // Stop effects after 5 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [celebrate, thumbsDown]);
 
   return (
-    <div className="flex flex-col items-center justify-center h-screen transition-all" style={{ backgroundColor: bgColor }}>
-      <motion.h1
-        className="text-4xl font-bold mb-6"
-        animate={{ scale: [1, 1.1, 1] }}
-        transition={{ duration: 0.5 }}
-      >
-        {message}
-      </motion.h1>
-      <button onClick={handleSurprise} className="text-lg px-6 py-3 bg-blue-500 text-white rounded-2xl shadow-md hover:bg-blue-600">
-        Surprise Me!
+    <div className="container">
+      <button onClick={handleSurpriseMe} disabled={loading} className="button-85">
+        {loading ? 'Loading...' : 'Surprise Me!'}
       </button>
+
+      {error && <p className="error">{error}</p>}
+
+      {match && (<h1>Cricket Score Predictor</h1>)}
+      {match && (
+        <div className="match-details">
+          <h2>Match: {match.teams[0]} vs {match.teams[1]}</h2>
+          <p>Venue: {match.venue}</p>
+          <p>Date: {new Date(match.date).toLocaleDateString()}</p>
+
+          <h3>Predict the winning team</h3>
+          <div className="prediction-buttons">
+            <button
+              onClick={() => handlePrediction(match.teams[0])}
+              className={!!prediction ? prediction == match.teams[0] ? "button-50 disabled" : "button-50 disabled loser" :"button-50"}
+              disabled={!!prediction} // Disable if prediction is made
+            >
+              {match.teams[0]}
+            </button>
+            <button
+              onClick={() => handlePrediction(match.teams[1])}
+              className={!!prediction ? prediction == match.teams[1] ? "button-50 disabled" : "button-50 disabled loser" :"button-50"}
+              disabled={!!prediction} // Disable if prediction is made
+            >
+              {match.teams[1]}
+            </button>
+          </div>
+
+          {prediction && (
+            <div className="result">
+              <h3>{result}</h3>
+              <div className="score-details">
+                <h3>Scores:</h3>
+                {match.score && match.score.map((inning, index) => (
+                  <p key={index}>
+                    {inning.inning}: {inning.r}/{inning.w} in {inning.o} overs
+                  </p>
+                ))}
+                <p>Status: {match.status}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {/* Confetti for correct prediction */}
+      {celebrate && <Confetti />}
+
+      {/* Thumbs-down emojis for incorrect prediction */}
+      {thumbsDown && (
+        <div className="wrong-prediction-container">
+          {Array.from({ length: 50 }).map((_, index) => (
+            <span
+              key={index}
+              className="wrong-prediction-emoji"
+              style={{
+                left: `${Math.random() * 100}vw`,
+                animationDuration: `${Math.random() * 3 + 2}s`,
+              }}
+            >
+              😢
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
-}
+};
 
-export default App
+export default App;
