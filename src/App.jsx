@@ -77,7 +77,7 @@ const App = () => {
 
       {error && <p className="error">{error}</p>}
 
-      {match && (<h1>Cricket Score Predictor</h1>)}
+      {match && (<h1>Can you predict who has won this match?</h1>)}
       {match && (
         <div className="match-details">
           <h2>Match: {match.teams[0]} vs {match.teams[1]}</h2>
